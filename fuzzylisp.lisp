@@ -32,7 +32,36 @@
    :def-set-fuzzy
    :discretise?-fuzzy
    :dset-member?-fuzzy
-   :discretise-fn-fuzzy
+   :discretise-fn?-fuzzy
+   ;;
+   :set-complement-membership?-fuzzy
+   :set-union-membership?-fuzzy
+   :set-intersect-membership?-fuzzy
+   ;;
+   :intv-add-fuzzy
+   :intv-sub-fuzzy
+   :intv-mult-fuzzy
+   :intv-div-fuzzy
+   ;;
+   :add-fuzzy
+   :sub-fuzzy
+   :mult-fuzzy
+   :div-fuzzy
+   ;;
+   :fuzzy-factor
+   :fuzzy-shift
+   :expand-contract-fuzzy
+   ;;
+   :add-sets-fuzzy
+   :avg-fuzzy
+   ;;
+   :simple-defuzzification
+   ;;
+   :list-sets-fuzzy
+   :lv-membership-fuzzy
+   :lv-membership?-fuzzy
+   ;;
+   :dlv-membership?-fuzzy
    ))
 ;;
 (in-package #:fuzzylogic)
@@ -383,7 +412,7 @@
 ;;
 ;;
 ;;
-(defun discretise-fn-fuzzy (name fn steps a b)
+(defun discretise-fn?-fuzzy (name fn steps a b)
   (let ((out (list name))
         (resolution (/ (- b a) steps)))
     (loop with x = a while (<= x (+ b 0.00001))
@@ -450,9 +479,11 @@
                                 (nth 0 cut1b) (nth 1 cut1b)))
           (sum2 (intv-add-fuzzy (nth 0 cut2a) (nth 1 cut2a)
                                 (nth 0 cut2b) (nth 1 cut2b))))
-      (push '0.25 sum1)
-      (push '0.75 sum2)
-      (def-set-fuzzy name sum1 sum2))))
+      (setf sum1 (reverse sum1)
+            sum2 (reverse sum2))
+      (setf sum1 (push '0.25 sum1))
+      (setf sum2 (push '0.75 sum2))
+      (def-set-fuzzy name (reverse sum1) (reverse sum2)))))
 ;;
 (defun sub-fuzzy (name a b)
   (let ((cut1a (alpha-cut?-fuzzy a 0.25))
@@ -464,9 +495,11 @@
                                 (nth 0 cut1b) (nth 1 cut1b)))
           (sum2 (intv-sub-fuzzy (nth 0 cut2a) (nth 1 cut2a)
                                 (nth 0 cut2b) (nth 1 cut2b))))
-      (push '0.25 sum1)
-      (push '0.75 sum2)
-      (def-set-fuzzy name sum1 sum2))))
+      (setf sum1 (reverse sum1)
+            sum2 (reverse sum2))
+      (setf sum1 (push '0.25 sum1))
+      (setf sum2 (push '0.75 sum2))
+      (def-set-fuzzy name (reverse sum1) (reverse sum2)))))
 ;;
 ;;
 (defun mult-fuzzy (name a b n)
@@ -496,7 +529,8 @@
           do (let* ((cutA (rest (alpha-cut?-fuzzy a alpha)))
                     (cutB (rest (alpha-cut?-fuzzy b alpha)))
                     (div (intv-div-fuzzy 
-                          (first cutA) (car (last cutA)) (first cutB) (car (last cutB)))))
+                          (first cutA) (car (last cutA))
+                          (first cutB) (car (last cutB)))))
                (setf head (cons (append (list (first div)) 
                                         (list alpha)) 
                                 head))
@@ -505,6 +539,8 @@
                                 tail))
                (setf alpha (+ interval alpha))))
     (append (list name) (reverse head) (rest tail))))
+;;
+;;
 ;;
 (defun fuzzy-factor (set k)
   (let ((x1 (* k (nth 1 set)))
@@ -515,3 +551,67 @@
         (list (nth 0 set) x1 x2 x3 x4)
         (list (nth 0 set) x4 x3 x2 x1))))
 ;;
+(defun fuzzy-shift (set x)
+  (list (nth 0 set)
+        (+ x (nth 1 set))
+        (+ x (nth 2 set))
+        (+ x (nth 3 set))
+        (+ x (nth 4 set))))
+;;
+(defun expand-contract-fuzzy (set k)
+  (let* ((center1 (/ (+ (nth 2 set) (nth 3 set)) 2.0))
+         (result  (fuzzy-factor set k))
+         (center2 (/ (+ (nth 2 result) (nth 3 result)) 2.0)))
+    (fuzzy-shift result (* (- center2 center1) -1.0))))
+;;
+;;
+;;
+(defun add-sets-fuzzy (sets name)
+  (let ((n (length sets))
+        (out '()))
+    (setf out (add-fuzzy name
+                         (eval (nth 0 sets))
+                         (eval (nth 1 sets))))
+    (loop for i from 2 below n
+          do (setf out (add-fuzzy name out (eval (nth i sets)))))
+    out))
+;;
+(defun avg-fuzzy (sets name)
+  (fuzzy-factor (add-sets-fuzzy sets name)
+                (/ 1.0 (length sets))))
+;;
+;;
+;;
+(defun simple-defuzzification (set mode)
+  (let ((m (/ (+ (nth 2 set)
+                 (nth 3 set)) 2.0)))
+    (case mode
+      (1 (/ (+ (nth 1 set) m (nth 4 set)) 3.0))
+      (2 (/ (+ (nth 1 set) (* m 2.0) (nth 4 set)) 4.0))
+      (3 (/ (+ (nth 1 set) (* m 4.0) (nth 4 set)) 6.0))
+      (4 (/ (+ (nth 1 set) (* m 6.0) (nth 4 set)) 8.0)))))
+;;
+(defun list-sets-fuzzy (sets)
+  (loop for i from 0 below (length sets)
+        do (progn (format t "~A~%" (eval (nth i sets))))))
+;;
+;;
+(defun lv-membership-fuzzy (lv x)
+  (loop for i from 0 below (length lv)
+        do (let ((fset (eval (nth i lv))))
+             (format t "~A~%" (set-member?-fuzzy fset x)))))
+;;
+(defun lv-membership?-fuzzy (lv x)
+  (let ((out '()))
+    (loop for i from 0 below (length lv)
+          do (let ((fset (eval (nth i lv))))
+               (setf out (append out (list (set-member?-fuzzy fset x))))))
+    out))
+;;
+;;
+(defun dlv-membership?-fuzzy (lv x)
+  (let ((out '()))
+    (loop for i from 0 below (length lv)
+          do (let ((fset (eval (nth i lv))))
+               (setf out (append out (list (dset-member?-fuzzy fset x))))))
+    out))
