@@ -1,9 +1,42 @@
 ;;
-;; Fuzzy Lisp
+;; Fuzzy Logic
 ;;
 (in-package :cl-user)
-(defpackage #:fuzzywuzzy
-  (:use :cl))
+(defpackage #:fuzzylogic
+  (:use :cl)
+  (:export
+   :prinn
+   :belongs
+   :subset
+   :cardinality
+   :equivalent
+   :eql-c
+   :disjoint
+   :setcomplement?
+   :cartesian-product?
+   :union-cs?
+   ;;
+   :belongs-fuzzy
+   :belongs?-fuzzy
+   :belongs2?-fuzzy
+   ;;
+   :clean?-fuzzy
+   :union?-fuzzy
+   :intersection?-fuzzy
+   :complement?-fuzzy
+   :cartesian-product?-fuzzy
+   :set-member?-fuzzy
+   ;;
+   :alpha-cut?-fuzzy
+   ;;
+   :def-set-fuzzy
+   :discretise?-fuzzy
+   :dset-member?-fuzzy
+   :discretise-fn-fuzzy
+   ))
+;;
+(in-package #:fuzzylogic)
+;;
 ;;
 (defun prinn (a) 
   (format t "~%~A~%" a))
@@ -11,42 +44,55 @@
 (defun mklist (obj)
   (if (listp obj) obj (list obj)))
 ;;
+;;
 ;; Crisp Sets
 ;;
-(defun belongs? (x a)
-  (if (or (intersection (mklist x) (mklist a))
-          (equal x '()))
+;;
+
+(defun union-cs? (a b &key (pred #'<))
+  "Union of classic sets A B with sort pred"
+  (sort (union a b) pred))
+;;
+(defun belongs (x A)
+  "x belongs A"
+  (if (or (intersection (mklist x) (mklist A))
+          (equalp x '()))
       t nil))
 ;;
-(defun subset? (a b)
-  (if (or (equal (mklist a) 
+(defun subset (a b)
+  "A subset B"
+  (if (or (equalp (reverse (mklist a))
                  (intersection (mklist a) (mklist b)))
-          (equal a '()))
+          (equalp a '()))
       t nil))
 ;;
 (defun cardinality (a)
+  "Countable set have a number of elements"
   (length a))
 ;;
 (defun equivalent (a b)
-  (if (equal (cardinality a) (cardinality b))
+  "Equivalent sets have the same cardinality"
+  (if (equalp (cardinality a) (cardinality b))
       t nil))
 ;;
-(defun eql? (a b)
-  (equal a b))
+(defun eql-c (a b)
+  (equalp a b))
 ;;
-(defun disjoint? (a b)
-  (if (equal (intersection (mklist a) (mklist b)) '())
+(defun disjoint (a b)
+  (if (equalp (intersection (mklist a) (mklist b)) '())
       t nil))
 ;;
-(defun setcomplement (a u)
+(defun setcomplement? (a u)
+  "Return the complementary of A with respect to U"
   (let ((out '())
         (len (cardinality u)))
     (loop for i from 0 below len
-          do (if (not (belongs? (nth i u) a))
+          do (if (not (belongs (nth i u) a))
                  (setq out (cons (nth i u) out))))
     (reverse out)))
 ;;
-(defun cartesian-product (a b)
+(defun cartesian-product? (a b)
+  "A x B = {(x,y) | x E A and y E B}"
   (let ((la (cardinality a))
         (lb (cardinality b))
         (out '()))
@@ -57,34 +103,23 @@
     (reverse out)))
 ;;
 ;;
-(defvar aset '(A B C D E F G))
-(defvar U '(0 1 2 3 4 5 6 7 8 9))
-(defvar A '(1 3 5 7))
-(defvar B '(5 6 7 8 9))
-(defvar C '(0 1 2 3 4))
-;;
-(prinn (belongs? aset 'A))
-(prinn (belongs? aset 'Z))
-(prinn (belongs? aset '()))
-
-(prinn (subset? '(A) aset))
-(prinn (subset? '(W) aset))
-(prinn (subset? '() aset))
-
-(prinn (disjoint? '(A) '(A)))
-(prinn (disjoint? '(A) '(B)))
-
-(prinn (setcomplement '(A B C) '(C D)))
-;;
-(prinn (union A (setcomplement A U)))
-;;
-(prinn (cartesian-product A B))
-(prinn (cartesian-product '(1 2 3 4) '(a b c d)))
-;;
-;;
 ;; Sorites Paradox and Fuzzy Sets
 ;;
-(defun clean-fuzzy (a)
+;; A fuzzy set A is defined by a characteristic function Ua
+;; that maps every elemenet x E A to the closed interval of
+;; reals [0,1]
+;;
+;; A = {(x,Ua(x)) | x E A, Ua(x) E [0,1] }
+;; Ua : X -> [0,1]
+;;
+;; Ua(x) = 1 for x  E A
+;; Ua(x) = 0 for x !E A
+;;
+
+(defun clean?-fuzzy (a)
+  "
+    C = Uc(x) = first[x, Ua(x)]
+"
   (let ((la (cardinality a))
         (out '()))
     (loop for i from 0 below la
@@ -92,8 +127,11 @@
     (reverse out)))
 ;;
 ;;
-(defun union-fuzzy (a b)
-  (let* ((temp (union (clean-fuzzy a) (clean-fuzzy b)))
+(defun union?-fuzzy (a b)
+  "
+    C = A u B = Uc(x) = max[Ua(x), Ub(x)]
+"
+  (let* ((temp (union (clean?-fuzzy a) (clean?-fuzzy b)))
          (out '()))
     (loop for i from 0 below (cardinality temp)
           do (let* ((el (nth i temp))
@@ -104,8 +142,11 @@
                    (setf out (cons mdB out)))))
     (reverse out)))
 ;;
-(defun intersection-fuzzy (a b)
-  (let* ((temp (intersection (clean-fuzzy a) (clean-fuzzy b)))
+(defun intersection?-fuzzy (a b)
+  "
+    C = A n B = Uc(x) = min[Ua(x), Ub(x)]
+"
+  (let* ((temp (intersection (clean?-fuzzy a) (clean?-fuzzy b)))
          (out '()))
     (loop for i from 0 below (cardinality temp)
           do (let* ((el (nth i temp))
@@ -116,16 +157,24 @@
                    (setf out (cons mdB out)))))
     (reverse out)))
 ;;
-(defun complement-fuzzy (a)
+(defun complement?-fuzzy (a)
+  "
+    A' = 1 - Ua(x)
+"
   (let ((lA (cardinality a))
         (out '()))
     (loop for i from 0 below lA
           do (let* ((el (nth i a)))
-                   (setf out (cons (list (first el) (- 1.0 (car (last el)))) 
-                                   out))))
+               (setf out (cons (list (first el)
+                                     (- 1.0 (car (last el))))
+                               out))))
     (reverse out)))
 ;;
-(defun cartesian-product-fuzzy (a b)
+(defun cartesian-product?-fuzzy (a b)
+  "
+    A x B = {(x,y, Ur(x,y)) | x E A and y E B}
+    Ur(x,y) = min(Ua(x), Ub(y))
+"
   (let ((lA (cardinality a))
         (lB (cardinality b))
         (out '()))
@@ -139,9 +188,18 @@
                                  out))))
     (reverse out)))
 ;;
-(defun belongs?-fuzzy (set x)
+;;
+(defun belongs?-fuzzy (x A)
+  ""
+  (if (assoc x A)
+      (car (last (assoc x A)))
+      nil))
+;;
+(defun belongs-fuzzy (set x)
+  ""
   (if (and (>= x (nth 1 set)) (<= x (nth 4 set)))
-      t nil))
+      t
+      nil))
 ;;
 (defun set-member?-fuzzy (set x)
   (let ((name (nth 0 set))
@@ -150,23 +208,35 @@
         (x3 (nth 3 set))
         (x4 (nth 4 set)))
   (cond 
-    ((or (<= x x1) (>= x x4))
+    ((or (<= x x1) (>= x x4))           ; degree 0.0
      (list name 0.0))
-    ((and (> x x1) (< x x2))
-     (list name (/ (* (- x x1) 1.0) (- x2 x1))))
-    ((and (>= x x2) (<= x x3))
+    ((and (> x x1) (< x x2))            ; increasing degree
+     (list name (/ (* (- x x1) 1.0)
+                   (- x2 x1))))
+    ((and (>= x x2) (<= x x3))          ; nucleus is always 1.0
      (list name 1.0))
-    ((and (> x x3) (< x x4))
-     (list name (/ (* (- x4 x) 1.0) (- x4 x3)))))))
+    ((and (> x x3) (< x x4))            ; decreasing degree
+     (list name (/ (* (- x4 x) 1.0)
+                   (- x4 x3)))))))
 ;;
-(defun alpha-cut-fuzzy (set alpha)
+(defun belongs2?-fuzzy (set x)
+  (if (and (>= x (nth 1 set)) (<= x (nth 4 set)))
+      (set-member?-fuzzy set x)
+      nil))
+;;
+;; Support, Nucleus, Alpha Cut
+;; s  = x / x E [x1, x4]
+;; k  = x / Y x E [x2, x3], f(x) = 1.0
+;; aA = x / f(x) >= a
+;;
+(defun alpha-cut?-fuzzy (set alpha)
   (let ((name (nth 0 set))
         (x1 (nth 1 set))
         (x2 (nth 2 set))
         (x3 (nth 3 set))
         (x4 (nth 4 set))
-        (ex_l 0)
-        (ex_r 0))
+        (ex_l 0.0)
+        (ex_r 0.0))
     (if (= x1 x2)
         (setf ex_l x1))
     (if (/= x1 x2)
@@ -184,6 +254,15 @@
     (list name ex_l ex_r)))
 ;;
 (defun def-set-fuzzy (name acut1 acut2)
+  "Return set A defined by 2 alpha cuts as a
+    a1 < a2
+    acut:
+    (a1 a2 deg)
+
+    returns:
+    Fuzzy Logic Standard Set Representation
+    FLSSR (name x1 x2 x3 x4) "
+
   (let* ((triangle nil)
          (x1a (nth 0 acut1))
          (x1b (nth 1 acut1))
@@ -200,17 +279,22 @@
          (tempx 0.0)
          (tempy 0.0))
     (if (< (abs (- x1a x2a)) 0.000001)
-        (setf m1 single-float-positive-infinity)
+        ;; slope tangent equals inf
+        (setf m1 sb-ext:single-float-positive-infinity)
         (setf m1 (aux-calculate-m-fuzzy x1a x2a alpha1 alpha2)))
     (if (< (abs (- x1b x2b)) 0.000001)
-        (setf m2 single-float-positive-infinity)
+        (setf m2 sb-ext:single-float-positive-infinity)
         (setf m2 (aux-calculate-m-fuzzy x1b x2b alpha1 alpha2)))
+    ;; calculate x axis intersections
+    ;; base1 and base4 are extremes support
     (setf base1 (- x1a (/ alpha1 m1)))
     (if (< m2 0.0)
         (setf m2 (* m2 -1.0)))
     (setf base4 (+ (/ alpha1 m2) x1b))
+    ;; base2 and base3 represent the nucleus
     (setf base2 (/ (+ 1 (* m1 base1)) m1))
     (setf base3 (/ (- (* m2 base4) 1.0) m2))
+    ;; check triangular membership function
     (if (>= base2 base3)
         (progn
           (setf triangle t
@@ -225,26 +309,35 @@
   (/ (- y2 y1) (- x2 x1)))
 ;;
 ;;
-(defun discretise-fuzzy (set steps)
+(defun discretise?-fuzzy (set steps)
+  "
+    set:
+    Fuzzy Logic Standard Set Representation
+    FLSSR (name x1 x2 x3 x4)
+
+    returns:
+    Fuzzy Logic Discrete Set Representation
+    FLDSR (name x1U(x1) x2U(x2)...xNU(xN) )
+"
   (let* ((name (nth 0 set))
-        (x1 (nth 1 set))
-        (x2 (nth 2 set))
-        (x3 (nth 3 set))
-        (x4 (nth 4 set))
-        (out (list name))
-        (trap t)
-        (resolution (/ (- x2 x1) steps))
-        (x x1))
+         (x1 (nth 1 set))
+         (x2 (nth 2 set))
+         (x3 (nth 3 set))
+         (x4 (nth 4 set))
+         (out (list name))
+         (trapezium t)
+         (resolution (/ (- x2 x1) steps))
+         (x x1))
     (loop for i from 0 below steps
           do (progn
-               (setf out (cons (list x (car (last (set-member?-fuzzy set x)))) 
+               (setf out (cons (list x (car (last (set-member?-fuzzy set x))))
                                out))
                (setf x (+ x resolution))))
     (if (< (- x3 x2) 0.0000001)
         (progn
           (setf out (cons (list x2 1.0) out))
-          (setf trap nil))
-        (progn 
+          (setf trapezium nil))
+        (progn
           (setf resolution (/ (- x3 x2) steps))
           (setf x x2)
           (loop for i from 0 below steps
@@ -252,15 +345,17 @@
                      (setf out (cons (list x 1.0) out))
                      (setf x (+ x resolution))))))
     (setf resolution (/ (- x4 x3) steps))
-    (if trap
+    (if trapezium
         (setf x x3)
-        (setf x (+ x3 resolution)))
+        (setf x (+ x3 resolution)))     ; is triangle
     (loop for i from 0 below steps
           do (progn
-               (setf out (cons (list x (car (last (set-member?-fuzzy set x)))) 
+               (setf out (cons (list
+                                x
+                                (car (last (set-member?-fuzzy set x))))
                                out))
                (setf x (+ x resolution))))
-    (when trap
+    (when trapezium
       (setf out (cons (list x 0.0) out)))
     (reverse out)))
 ;;
@@ -268,13 +363,14 @@
   (let ((result (list (first dfset) 0.0))
         (n (length dfset)))
     (loop for i from 1 below (- n 1)
-          do (progn 
+          do (progn
                (let ((paira (nth i dfset))
                      (pairb (nth (+ 1 i) dfset)))
-                 (if (and (<= (first paira) x) 
+                 (when (and (<= (first paira) x)
                           (>= (first pairb) x))
-                     (setf result (list (first dfset) 
-                                        (interpolation paira pairb (- x (first paira)))))))))
+                     (setf result (list
+                                   (first dfset)
+                                   (interpolation paira pairb (- x (first paira)))))))))
     result))
 ;;
 (defun interpolation (pa pb p)
@@ -282,7 +378,10 @@
         (b (first pb))
         (y1 (car (last pa)))
         (y2 (car (last pb))))
+    ;; analytic geometry
     (+ y1 (/ (* p (- y2 y1)) (- b a)))))
+;;
+;;
 ;;
 (defun discretise-fn-fuzzy (name fn steps a b)
   (let ((out (list name))
@@ -294,18 +393,29 @@
     (reverse out)))
 ;;
 (defun set-complement-membership?-fuzzy (set x)
+  "
+    A' = 1 - Ua(x) / x E [x1, x4]
+    A' = 1 Y x !E [x1, x4], x E U
+"
   (list (first (set-member?-fuzzy set x))
         (- 1.0 (car (last (set-member?-fuzzy set x))))))
 ;;
 (defun set-union-membership?-fuzzy (name set1 set2 x)
+  "
+    A u B = max(Ua(x), Ub(x)) / x E [x1A, x4B]
+"
   (let ((mu1 (car (last (set-member?-fuzzy set1 x))))
         (mu2 (car (last (set-member?-fuzzy set2 x)))))
     (list name (max mu1 mu2))))
 ;;
 (defun set-intersect-membership?-fuzzy (name set1 set2 x)
+  "
+    A n B = min(Ua(x), Ub(x)) / x E [x1A, x4B]
+"
   (let ((mu1 (car (last (set-member?-fuzzy set1 x))))
         (mu2 (car (last (set-member?-fuzzy set2 x)))))
     (list name (min mu1 mu2))))
+;;
 ;;
 ;;
 (defun intv-add-fuzzy (x1 x2 x3 x4)
@@ -324,15 +434,18 @@
          (ex-r (max (/ a d) (/ a e) (/ b d) (/ b e))))
     (list ex-l ex-r)))
 ;;
+;; FIXME better macro expansion without crowbaring progn
+(defmacro multi-pop (&rest body)
+  (loop for l in body
+        collect `(pop ,l) into r
+        finally (return (cons 'progn r))))
+;;
 (defun add-fuzzy (name a b)
-  (let ((cut1a (alpha-cut-fuzzy a 0.25))
-        (cut1b (alpha-cut-fuzzy b 0.25))
-        (cut2a (alpha-cut-fuzzy a 0.75))
-        (cut2b (alpha-cut-fuzzy b 0.75)))
-    (pop cut1a)
-    (pop cut1b)
-    (pop cut2a)
-    (pop cut2b)
+  (let ((cut1a (alpha-cut?-fuzzy a 0.25))
+        (cut1b (alpha-cut?-fuzzy b 0.25))
+        (cut2a (alpha-cut?-fuzzy a 0.75))
+        (cut2b (alpha-cut?-fuzzy b 0.75)))
+    (multi-pop cut1a cut1b cut2a cut2b)
     (let ((sum1 (intv-add-fuzzy (nth 0 cut1a) (nth 1 cut1a) 
                                 (nth 0 cut1b) (nth 1 cut1b)))
           (sum2 (intv-add-fuzzy (nth 0 cut2a) (nth 1 cut2a)
@@ -342,15 +455,12 @@
       (def-set-fuzzy name sum1 sum2))))
 ;;
 (defun sub-fuzzy (name a b)
-  (let ((cut1a (alpha-cut-fuzzy a 0.25))
-        (cut1b (alpha-cut-fuzzy b 0.25))
-        (cut2a (alpha-cut-fuzzy a 0.75))
-        (cut2b (alpha-cut-fuzzy b 0.75)))
-    (pop cut1a)
-    (pop cut1b)
-    (pop cut2a)
-    (pop cut2b)
-    (let ((sum1 (intv-sub-fuzzy (nth 0 cut1a) (nth 1 cut1a) 
+  (let ((cut1a (alpha-cut?-fuzzy a 0.25))
+        (cut1b (alpha-cut?-fuzzy b 0.25))
+        (cut2a (alpha-cut?-fuzzy a 0.75))
+        (cut2b (alpha-cut?-fuzzy b 0.75)))
+    (multi-pop cut1a cut1b cut2a cut2b)
+    (let ((sum1 (intv-sub-fuzzy (nth 0 cut1a) (nth 1 cut1a)
                                 (nth 0 cut1b) (nth 1 cut1b)))
           (sum2 (intv-sub-fuzzy (nth 0 cut2a) (nth 1 cut2a)
                                 (nth 0 cut2b) (nth 1 cut2b))))
@@ -365,8 +475,8 @@
         (interval (/ 1.0 n))
         (alpha 0.0))
     (loop for i from 0 upto n
-          do (let* ((cutA (rest (alpha-cut-fuzzy a alpha)))
-                    (cutB (rest (alpha-cut-fuzzy b alpha)))
+          do (let* ((cutA (rest (alpha-cut?-fuzzy a alpha)))
+                    (cutB (rest (alpha-cut?-fuzzy b alpha)))
                     (mult (intv-mult-fuzzy (first cutA) (car (last cutA)) (first cutB) (car (last cutB)))))
                (setf head (cons (append (list (first mult)) 
                                         (list alpha)) 
@@ -383,8 +493,8 @@
         (interval (/ 1.0 n))
         (alpha 0.0))
     (loop for i from 0 upto n
-          do (let* ((cutA (rest (alpha-cut-fuzzy a alpha)))
-                    (cutB (rest (alpha-cut-fuzzy b alpha)))
+          do (let* ((cutA (rest (alpha-cut?-fuzzy a alpha)))
+                    (cutB (rest (alpha-cut?-fuzzy b alpha)))
                     (div (intv-div-fuzzy 
                           (first cutA) (car (last cutA)) (first cutB) (car (last cutB)))))
                (setf head (cons (append (list (first div)) 
@@ -405,81 +515,3 @@
         (list (nth 0 set) x1 x2 x3 x4)
         (list (nth 0 set) x4 x3 x2 x1))))
 ;;
-;;
-(defvar fA '((1 0.7) (2 0.1) (3 0.3) (4 0.9) (5 0.2)))
-(defvar fB '((1 0.1) (2 0.8) (3 0.9) (4 0.2) (5 1.0)))
-;;
-(prinn (clean-fuzzy fA))
-(prinn (clean-fuzzy fB))
-;;
-(prinn (union-fuzzy fA fB))
-(prinn (intersection-fuzzy fA fB))
-(prinn (intersection-fuzzy fA fA))
-;;
-(prinn (complement-fuzzy fA)) 
-;;
-;; Fuzzy sets don't conform to the Law of Non-Contradiction.
-(prinn (intersection-fuzzy fA (complement-fuzzy fA)))
-;;
-(prinn (cartesian-product-fuzzy fA fB))
-;;
-(defvar cold '(cold 0.0 0.0 10.0 20.0))
-(defvar comf '(comf 10.0 20.0 30.0 40.0))
-(defvar warm '(warm 30.0 40.0 100.0 100.0))
-;;
-(prinn (belongs?-fuzzy cold '15))
-(prinn (belongs?-fuzzy cold '25))
-;;
-(prinn (set-member?-fuzzy comf 25))
-(prinn (set-member?-fuzzy cold 25))
-(prinn (set-member?-fuzzy comf 35))
-(prinn (set-member?-fuzzy warm 35))
-;;
-;;
-(prinn (alpha-cut-fuzzy '(B1 7 10 12 15) 0.7))
-(prinn (alpha-cut-fuzzy '(B1 7 10 12 15) 0.0))
-(prinn (alpha-cut-fuzzy '(B1 7 10 12 15) 1.0))
-;;
-(prinn (def-set-fuzzy 'young '(15.0 35.0 0.0) '(25.0 25.0 1.0)))
-(prinn (def-set-fuzzy 'mature '(35.0 75.0 0.0) '(45.0 55.0 1.0)))
-;;
-(defvar dA (discretise-fuzzy '(B1 7 10 12 15) 4))
-(prinn dA)
-(prinn (discretise-fuzzy '(B1 7 10 12 15) 8))
-;;
-(prinn (dset-member?-fuzzy dA 8.21))
-;;
-;; y = (1 + cos(2pi(x-2)))/2
-(setf f1 (lambda (x) (/ (+ 1.0 (cos (* 2.0 pi (- x 2.0)))) 2.0)))
-(prinn (discretise-fn-fuzzy 'Bell f1 20 1.5 2.5))
-;;
-(prinn (set-complement-membership-fuzzy '(B1 7 10 12 15) 9))
-;;
-(defvar AA '(Triangle 1 5 5 10))
-(defvar BB '(Trapezium 5 10 15 20))
-;;
-(prinn (set-union-membership?-fuzzy 'AuB AA BB 7.5))
-(prinn (set-intersect-membership?-fuzzy 'AintB AA BB 8))
-;;
-;;
-(prinn (intv-add-fuzzy 2 4 1 3))
-(prinn (intv-sub-fuzzy 2 4 1 3))
-(prinn (intv-mult-fuzzy 2 4 1 3))
-(prinn (intv-div-fuzzy 2 4 1 3))
-;;
-(prinn (def-set-fuzzy 'A+B '(6.6625 7.3375 0.25) '(6.8875 7.1125 0.75)))
-;;
-(defvar AAA '(around-2 1.75 2 2 2.25))
-(defvar BBB '(around-5 4.8 5 5 5.2))
-;;
-(prinn (add-fuzzy 'A+B AA BB))
-(prinn (sub-fuzzy 'A-B AA BB))
-;;
-(prinn (mult-fuzzy 'AxB AA BB 5))
-(prinn (div-fuzzy 'A/B AA BB 5))
-(prinn (div-fuzzy 'B/A BB AA 5))
-;;
-(prinn (dset-member?-fuzzy (div-fuzzy 'B/A BB AA 5) 2.4))
-;;
-(prinn (fuzzy-factor '(A1 -2 3 3 8) 0.25))
-(prinn (fuzzy-factor '(A1 -2 3 3 8) 3))
