@@ -62,7 +62,22 @@
    :lv-membership?-fuzzy
    ;;
    :dlv-membership?-fuzzy
+   ;;
+   :implication-frbs
+   ;;
+   :p-and-q?-fuzzy
+   :p-or-q?-fuzzy
+   :p-not?-fuzzy
+   :p-implies-q?-fuzzy
+   ;;
+   :dp-and-q?-fuzzy
+   :dp-or-q?-fuzzy
+   :dp-not?-fuzzy
+   :dp-implies-q?-fuzzy
+   ;;
+   :dset-hedge?-fuzzy
    ))
+;;
 ;;
 (in-package #:fuzzylogic)
 ;;
@@ -72,6 +87,7 @@
 ;;
 (defun mklist (obj)
   (if (listp obj) obj (list obj)))
+
 ;;
 ;;
 ;; Crisp Sets
@@ -230,33 +246,37 @@
       t
       nil))
 ;;
-(defun set-member?-fuzzy (set x)
-  (let ((name (nth 0 set))
-        (x1 (nth 1 set))
-        (x2 (nth 2 set))
-        (x3 (nth 3 set))
-        (x4 (nth 4 set)))
-  (cond 
-    ((or (<= x x1) (>= x x4))           ; degree 0.0
-     (list name 0.0))
-    ((and (> x x1) (< x x2))            ; increasing degree
-     (list name (/ (* (- x x1) 1.0)
-                   (- x2 x1))))
-    ((and (>= x x2) (<= x x3))          ; nucleus is always 1.0
-     (list name 1.0))
-    ((and (> x x3) (< x x4))            ; decreasing degree
-     (list name (/ (* (- x4 x) 1.0)
-                   (- x4 x3)))))))
-;;
-(defun belongs2?-fuzzy (set x)
-  (if (and (>= x (nth 1 set)) (<= x (nth 4 set)))
-      (set-member?-fuzzy set x)
-      nil))
 ;;
 ;; Support, Nucleus, Alpha Cut
 ;; s  = x / x E [x1, x4]
 ;; k  = x / Y x E [x2, x3], f(x) = 1.0
 ;; aA = x / f(x) >= a
+;;
+;;
+(defun set-member?-fuzzy (set x)
+  (let ((name (nth 0 set))
+        (x1 (nth 1 set))                ; support
+        (x2 (nth 2 set))                ; nucleus starts
+        (x3 (nth 3 set))                ; nuclues ends
+        (x4 (nth 4 set))
+        (mem-deg nil))                  ; support ends
+    (cond
+      ((or (< x x1) (> x x4))         ; degree 0.0
+       (setf mem-deg 0.0))
+      ((and (>= x x1) (< x x2))          ; increasing degree
+       (setf mem-deg (/ (* (- x x1) 1.0)
+                        (- x2 x1))))
+      ((and (>= x x2) (<= x x3))        ; nucleus is always 1.0
+       (setf mem-deg 1.0))
+      ((and (> x x3) (<= x x4))          ; decreasing degree
+       (setf mem-deg (/ (* (- x4 x) 1.0)
+                        (- x4 x3)))))
+    (list name mem-deg)))
+;;
+(defun belongs2?-fuzzy (set x)
+  (if (and (>= x (nth 1 set)) (<= x (nth 4 set)))
+      (set-member?-fuzzy set x)
+      nil))
 ;;
 (defun alpha-cut?-fuzzy (set alpha)
   (let ((name (nth 0 set))
@@ -388,6 +408,7 @@
       (setf out (cons (list x 0.0) out)))
     (reverse out)))
 ;;
+;;
 (defun dset-member?-fuzzy (dfset x)
   (let ((result (list (first dfset) 0.0))
         (n (length dfset)))
@@ -396,19 +417,21 @@
                (let ((paira (nth i dfset))
                      (pairb (nth (+ 1 i) dfset)))
                  (when (and (<= (first paira) x)
-                          (>= (first pairb) x))
-                     (setf result (list
-                                   (first dfset)
-                                   (interpolation paira pairb (- x (first paira)))))))))
+                            (>= (first pairb) x))
+                   (setf result (list
+                                 (first dfset)
+                                 (interpolation paira pairb
+                                                (- x (first paira)))))))))
     result))
 ;;
 (defun interpolation (pa pb p)
-  (let ((a (first pa))
+  (let* ((a (first pa))
         (b (first pb))
+        (c (if (= 0 (- b a)) 1 (- b a)))
         (y1 (car (last pa)))
         (y2 (car (last pb))))
     ;; analytic geometry
-    (+ y1 (/ (* p (- y2 y1)) (- b a)))))
+    (+ y1 (/ (* p (- y2 y1)) c))))
 ;;
 ;;
 ;;
@@ -609,9 +632,107 @@
     out))
 ;;
 ;;
-(defun dlv-membership?-fuzzy (lv x)
+(defun dlv-membership?-fuzzy (dlv x)
   (let ((out '()))
-    (loop for i from 0 below (length lv)
-          do (let ((fset (eval (nth i lv))))
+    (loop for i from 0 below (length dlv)
+          do (let ((fset (eval (nth i dlv))))
                (setf out (append out (list (dset-member?-fuzzy fset x))))))
     out))
+;;
+;;
+;; FRBS
+;; Fuzzy Rule Based System
+;;
+;;
+(defun implication-frbs (p q)
+  (not (and p (not q))))
+;;
+;;
+(defun truth-val?-fuzzy (set x)
+  (set-member?-fuzzy set x))
+;;
+;;
+;;
+(defun p-and-q?-fuzzy (p q x y)
+  "
+    Tv(p^q) = min(Tv(p), Tv(q)) = min(Ua(x), Ub(y))
+"
+  (let ((a (car (last (set-member?-fuzzy p x))))
+        (b (car (last (set-member?-fuzzy q y)))))
+    (min a b)))
+;;
+(defun p-or-q?-fuzzy (p q x y)
+  "
+    Tv(p v q) = max(Tv(p), Tv(q)) = max(Ua(x), Ub(y))
+"
+  (let ((a (car (last (set-member?-fuzzy p x))))
+        (b (car (last (set-member?-fuzzy q y)))))
+    (max a b)))
+;;
+(defun p-not?-fuzzy (p x)
+  "
+    Tv(!p) = 1 - Tv(p) = 1 - (Ua(x))
+"
+  (- 1.0 (car (last (set-member?-fuzzy p x)))))
+;;
+(defun p-implies-q?-fuzzy (p q x y)
+  "
+    Tv(p -> q) = min(1, 1 + Tv(q) - Tv(p)) = min(1, 1 + Ub(y) - Ua(x))
+"
+  (let ((a (car (last (set-member?-fuzzy p x))))
+        (b (car (last (set-member?-fuzzy q y)))))
+    (min 1.0 (- (+ 1.0 b) a))))
+;;
+;;
+;;
+(defun dp-and-q?-fuzzy (dp dq x y)
+  "
+    Tv(p^q) = min(Tv(p), Tv(q)) = min(Ua(x), Ub(y))
+"
+  (let ((a (car (last (dset-member?-fuzzy dp x))))
+        (b (car (last (dset-member?-fuzzy dq y)))))
+    (min a b)))
+;;
+(defun dp-or-q?-fuzzy (dp dq x y)
+  "
+    Tv(p v q) = max(Tv(p), Tv(q)) = max(Ua(x), Ub(y))
+"
+  (let ((a (car (last (dset-member?-fuzzy dp x))))
+        (b (car (last (dset-member?-fuzzy dq y)))))
+    (max a b)))
+;;
+(defun dp-not?-fuzzy (dp x)
+  "
+    Tv(!p) = 1 - Tv(p) = 1 - (Ua(x))
+"
+  (- 1.0 (car (last (dset-member?-fuzzy dp x)))))
+;;
+(defun dp-implies-q?-fuzzy (dp dq x y)
+  "
+    Tv(p -> q) = min(1, 1 + Tv(q) - Tv(p)) = min(1, 1 + Ub(y) - Ua(x))
+"
+  (let ((a (car (last (dset-member?-fuzzy dp x))))
+        (b (car (last (dset-member?-fuzzy dq y)))))
+    (min 1.0 (- (+ 1.0 b) a))))
+;;
+;;
+;;
+(defun dset-hedge?-fuzzy (dset hedge)
+  "
+    HA = H(Ua(x))
+    H1 = H1(Ua(x)) = (Ua(x))^2
+    H2 = H2(Ua(x)) = (Ua(x))^1/2
+"
+  (let ((out (list (first dset))))
+    (loop for i from 1 below (length dset)
+          do (let ((sub (nth i dset)))
+               (cond
+                 ((equal "FAIRLY" hedge)
+                  (setf out (cons (list (first sub)
+                                        (sqrt (car (last sub))))
+                                  out)))
+                 ((equal "VERY" hedge)
+                  (setf out (cons (list (first sub)
+                                        (expt (car (last sub)) 2))
+                                  out))))))
+    (reverse out)))

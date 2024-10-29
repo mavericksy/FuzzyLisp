@@ -283,9 +283,11 @@
 
 (test set-member?-fuzzy
   "Test set membership"
-  (is (equalp '(medium 1) (f:set-member?-fuzzy comfy-temp 25)) "")
-  (is (equalp '(hot 0.5)  (f:set-member?-fuzzy hot-temp 35)) "")
-  (is (equalp '(hot 0.5)  (f:belongs2?-fuzzy hot-temp 35)) "")
+  (is (equalp '(cold 0) (f:set-member?-fuzzy cold-temp 100.0)) "")
+  (is (equalp '(medium 1) (f:set-member?-fuzzy comfy-temp 25.0)) "")
+  (is (equalp '(hot 0.5)  (f:set-member?-fuzzy hot-temp 35.0)) "")
+  (is (equalp '(hot 1.0)  (f:set-member?-fuzzy hot-temp 100.0)) "")
+  (is (equalp '(hot 0.5)  (f:belongs2?-fuzzy hot-temp 35.0)) "")
   )
 
 (test alpha-cut?-fuzzy
@@ -374,7 +376,8 @@
 
 (test intv-add
   ""
-  (is (equalp '(3 7) (f:intv-add-fuzzy 2 4 1 3)) "")
+  (is (equalp '(3 7)
+              (f:intv-add-fuzzy 2 4 1 3)) "")
   )
 
 (test intv-sub
@@ -389,7 +392,8 @@
 
 (test intv-div
   ""
-  (is (equalp '(2/3 4) (f:intv-div-fuzzy 2 4 1 3)) "")
+  (is (equalp '(2/3 4)
+              (f:intv-div-fuzzy 2 4 1 3)) "")
   )
 
 (defvar caA '(around-2 1.75 2 2 2.25))
@@ -441,6 +445,7 @@
 
 (test expand-contract-fuzzy
   ""
+  (is (equalp '(a 4 4 4 4)  (f:expand-contract-fuzzy '(a 2 3 5 6) 0)))
   (is (equalp '(a -1 1 1 3) (f:expand-contract-fuzzy '(a 0 1 1 2) 2.0)) "")
   (is (equalp '(a 0 1 1 2)  (f:expand-contract-fuzzy '(a -1 1 1 3) 0.5)) "")
   )
@@ -458,11 +463,11 @@
 
 (test add-sets-fuzzy
   ""
-  (is (equalp '(sof 22.0 29.857138 31.85714 38.0)
-              (f:add-sets-fuzzy fsets 'sof)) "")
+  (is (equalp '(SOF 22.0 29.857138 31.85714 38.0)
+              (f:add-sets-fuzzy fsets 'SOF)) "")
   )
 
-(print (f:add-sets-fuzzy fsets 'sof))
+;; (print (f:add-sets-fuzzy fsets 'SOF))
 
 (test avg-fuzzy
   ""
@@ -497,10 +502,10 @@
 ;; (print (f:lv-membership-fuzzy lv-agge 23))
 ;; (print (f:lv-membership?-fuzzy lv-agge 23))
 
-(defvar ff1 #'(lambda (x) (/ (+ 1.0 (cos (* 0.0333 pi (- x 0.0)))) 2.0)))
-(defvar ff2 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067 pi (- x 30.0)))) 2.0)))
-(defvar ff3 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067 pi (- x 45.0)))) 2.0)))
-(defvar ff4 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067 pi (- x 60.0)))) 2.0)))
+(defvar ff1 #'(lambda (x) (/ (+ 1.0 (cos (* 0.0333 pi (- x 0.0))))  2.0)))
+(defvar ff2 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067  pi (- x 30.0)))) 2.0)))
+(defvar ff3 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067  pi (- x 45.0)))) 2.0)))
+(defvar ff4 #'(lambda (x) (/ (+ 1.0 (cos (* 0.067  pi (- x 60.0)))) 2.0)))
 (defvar ff5 #'(lambda (x) (/ (+ 1.0 (cos (* 0.0333 pi (- x 90.0)))) 2.0)))
 ;;
 (defvar dBell1 (discretise-fn?-fuzzy 'young   ff1 20  0 30))
@@ -513,8 +518,113 @@
 ;;
 ;; (print (f:dlv-membership?-fuzzy lv-age-bells 23))
 ;;
-;;
 (run! 'fuzzy-sets)
+
+(def-suite frbs)
+
+(def-suite frbs-classical-logic :in frbs)
+(in-suite frbs-classical-logic)
+
+(test classical-logic
+  "Test all classical logic operations
+  T = 1
+  F = 0
+
+  p ^ q  = min(p,q)
+  p v q  = max(p,q
+  !p     = 1 - p
+  p -> q = min(1, 1 + q - p)
+"
+  (is-true  (and t t))
+  (is-true  (or t t))
+  (is-false (not t))
+  (is-true  (f:implication-frbs t t))
+  ;;
+  (is-false (and t nil))
+  (is-true  (or t nil))
+  (is-false (not t))
+  (is-false (f:implication-frbs t nil))
+  ;;
+  (is-false (and nil t))
+  (is-true  (or nil t))
+  (is-true  t)
+  (is-true  (f:implication-frbs nil t))
+  ;;
+  (is-false (and nil nil))
+  (is-false (or nil nil))
+  (is-true  (not nil))
+  (is-true  (f:implication-frbs nil nil))
+  )
+;;
+;;
+(defvar aP '(young 0 0 15 30))
+(defvar aQ '(old   50 90 90 90))
+;;
+(defvar adP (f:discretise?-fuzzy '(young 0 0 15 30) 4))
+(defvar adQ (f:discretise?-fuzzy '(old   50 90 90 90) 4))
+;;
+(def-suite frbs-fuzzy-logic :in frbs)
+(in-suite frbs-fuzzy-logic)
+;;
+(test p-and-q
+  ""
+  (is (equalp 0.125 (f:p-and-q?-fuzzy aQ aP 55 18)))
+  )
+
+(test p-or-q
+  ""
+  (is (equalp 0.8 (f:p-or-q?-fuzzy aQ aP 55 18)))
+  )
+
+(test p-not
+  ""
+  (is (equalp 0.875      (f:p-not?-fuzzy aQ 55)))
+  (is (equalp 0.19999999 (f:p-not?-fuzzy aP 18)))
+  )
+
+(test p-implies-q
+  ""
+  (is (equalp 1.0 (f:p-implies-q?-fuzzy aQ aP 55 10)))
+  (is (equalp 0.0 (f:p-implies-q?-fuzzy aQ aP 90 30)))
+  )
+
+(test dp-and-q
+  ""
+  (is (equalp 0.125 (f:dp-and-q?-fuzzy adQ adP 55 18)))
+  )
+
+(test dp-or-q
+  ""
+  (is (equalp 0.8 (f:dp-or-q?-fuzzy adQ adP 55 18)))
+  )
+
+(test dp-not
+  ""
+  (is (equalp 0.875      (f:dp-not?-fuzzy adQ 55)))
+  (is (equalp 0.19999999 (f:dp-not?-fuzzy adP 18)))
+  )
+
+(test dp-implies-q
+  ""
+  (is (equalp 1.0 (f:dp-implies-q?-fuzzy adQ adP 55 10)))
+  (is (equalp 0.0 (f:dp-implies-q?-fuzzy adQ adP 90 30)))
+  )
+
+(defvar hA '(A1 (7 0.0) (31/4 0.5) (17/2 0.70710677) (37/4 0.8660254) (10 1.0) (21/2 1.0)
+ (11 1.0) (23/2 1.0) (12 1.0) (51/4 0.8660254) (27/2 0.70710677) (57/4 0.5)
+ (15 0.0)))
+
+(defvar hB '(A1 (7 0.0) (31/4 0.0625) (17/2 0.25) (37/4 0.5625) (10 1.0) (21/2 1.0)
+ (11 1.0) (23/2 1.0) (12 1.0) (51/4 0.5625) (27/2 0.25) (57/4 0.0625) (15 0.0)))
+
+(test dset-hedge?-fuzzy
+  ""
+  (is (equalp hA (f:dset-hedge?-fuzzy (f:discretise?-fuzzy '(A1 7 10 12 15) 4) "FAIRLY")))
+  (is (equalp hB (f:dset-hedge?-fuzzy (f:discretise?-fuzzy '(A1 7 10 12 15) 4) "VERY")))
+  )
+
+(run! 'frbs)
+
 ;;;
 ;;;
 ;;; Test the use of fuzzy sets in control simulations
